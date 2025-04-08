@@ -9,11 +9,12 @@ format: html
 
 # Libraries
 library(tidyverse)
+library(here)
 
 # file names
-datadir_raw <- file.path("data","raw")
+datadir_raw <- file.path(here("data","raw"))
 
-datadir_processed <- file.path("data", "processed/")
+datadir_processed <- file.path(here("data", "processed/"))
 
 species_file <- "ASDN_Daily_species.csv"
 
@@ -48,9 +49,14 @@ snowsurvey_csv %>%
 
 Let's focus on the non-numeric values as a starting point:
 
-```{r}
-snowsurvey_csv %>%
+- write some code to create a list of everything that's not numeric in the `Snow_cover` column
+- write an if else statement to print all values that aren't a number between 0-100
 
+```{r}
+snowsurvey_csv %>% 
+  count(Snow_cover) %>% 
+  # filter to keep only the rows that are not numeric
+  filter(is.na(as.numeric(Snow_cover)))
 ```
 
 ### Data cleaning
@@ -68,7 +74,14 @@ snowsurvey_csv %>%
 Interestingly, when there is a "dot" for snow cover, it is also the case for all the other covers. Let's replace those with NA since there is no supplemental information in the provided metadata about the use of dots
 
 ```{r}
-snowsurvey_fixed <- 
+# recplace all the "." observations with NA
+snowsurvey_fixed <- snowsurvey_csv %>%
+  mutate(Snow_cover = ifelse(Snow_cover == ".", NA, Snow_cover))
+
+# check to make sure this worked; we should see no "." values
+snowsurvey_fixed %>%
+  filter(Snow_cover == ".") %>% 
+  view()
 ```
 
 #### `-` values
@@ -76,14 +89,17 @@ snowsurvey_fixed <-
 Is he problem is similar with "-"?
 
 ```{r}
-snowsurvey_csv 
+snowsurvey_csv %>%
+  filter(Snow_cover == "-") %>%
+  View()
 ```
 
 
 let's set it to NA:
 
 ```{r}
-snowsurvey_fixed <- 
+snowsurvey_fixed <- snowsurvey_fixed %>% 
+  mutate(Snow_cover = ifelse(Snow_cover == "-", NA, Snow_cover))
 ```
 
 #### `n/a` values
@@ -92,15 +108,16 @@ snowsurvey_fixed <-
 
 ```{r}
 snowsurvey_csv %>%
-  
+  filter(Snow_cover == "n/a") %>%
+  View()
 ```
 
 
 Same pattern, let's substitute with NA:
 
 ```{r}
-snowsurvey_fixed <- 
- 
+snowsurvey_fixed <- snowsurvey_fixed %>% 
+  mutate(Snow_cover = ifelse(Snow_cover == "n/a", NA, Snow_cover))
 ```
 
 #### `unk` values
@@ -109,12 +126,14 @@ What about "unk"? It is probably an abbreviation for unknown:
 
 ```{r}
 snowsurvey_csv %>%
-  
+  filter(Snow_cover == "unk") %>%
+  View()
 ```
 
 
 ```{r}
-snowsurvey_fixed <- 
+snowsurvey_fixed <- snowsurvey_fixed %>% 
+  mutate(Snow_cover = ifelse(Snow_cover == "unk", NA, Snow_cover))
 ```
 
 #### `<1` values
@@ -122,11 +141,16 @@ snowsurvey_fixed <-
 Finally What should we replace"<1" with?
 
 ```{r}
-
+snowsurvey_csv %>%
+  filter(Snow_cover == "<1") %>%
+  View()
 ```
 
-```{r}
+We should assign it a value of 0 because the 3 columns should equate to 100.
 
+```{r}
+snowsurvey_fixed <- snowsurvey_fixed %>% 
+  mutate(Snow_cover = ifelse(Snow_cover == "<1", 0, Snow_cover))
 ```
 
 
@@ -143,7 +167,8 @@ snowsurvey_fixed %>%
 Ok, we can do the transformation:
 
 ```{r}
-snowsurvey_fixed <- 
+snowsurvey_fixed <- snowsurvey_fixed %>%
+  mutate(Snow_cover = as.numeric(Snow_cover))
 ```
 
 Yeah we have finally a numeric column 🎉. 
