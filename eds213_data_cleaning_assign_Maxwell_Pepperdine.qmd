@@ -1,0 +1,653 @@
+---
+title: "EDS 213 Week 2 Assignment - Data Cleaning"
+author: "Maxwell Pepperdine"
+date: last-modified
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Background 
+
+#### Load packages
+
+```{r}
+# clear the environment
+rm(list = ls())
+```
+
+```{r}
+# Load packages
+library(tidyverse) # always
+library(here) # for file paths
+```
+
+#### Assignment Description
+
+We cleaned the `Snow_cover` column during class. Inspiring yourself from the steps we followed, do the following in a quarto document:
+
+1. Clean the `Water_cover` column to transform it into the correct data type and respect expectations for a percentage
+
+2. Clean the `Land_cover` column to transform it into the correct data type and respect expectations for a percentage
+
+3. Use the relationship between the three cover columns (Snow, Water, Land) to infer missing values where possible and recompute the `Total_cover` column as needed
+
+**Add comments to your quarto document about your decisions and assumptions**, this will be a large part of the grading (see below).
+
+#### Expectations
+
+The expectations are:
+
+- The Quarto document `eds213_data_cleaning_assign_Maxwell_Pepperdine.qmd` should run if your repo is cloned locally (5 pts; Reproducibility)
+- The code should output a csv file named all_cover_fixed_YOURNAME.csv in the data/processed folder (5 pts; Code)
+- Comment your code well (10 pts; Documentation)
+- Your quarto document should provide all the necessary explanations about your decisions and discuss any assumptions you made (don’t forget to look at the metadata!) (30 pts; Documentation)
+- The code should perform the 3 data cleaning steps describe above to enable ingestion into a database (50 pts; Technical concepts)
+
+#### Load data
+
+Import the `ASDN_Snow_survey.csv` file with the corrected `Snow_cover` column (`data/processed/snow_cover.csv`) from the previous class exercise. We will use this file as a starting point for this data cleaning exercise. 
+
+```{r}
+# load the cleaned Snow_cover file
+snow_survey <- read_csv(here("data/processed/snow_cover.csv"))
+```
+
+## (1) Clean the `Water_cover` column
+
+#### Data exploration 
+
+Take a look at the `Water_cover` column to see what's wrong. 
+
+```{r}
+# Check the data types of the columns
+snow_survey %>% 
+  count(Water_cover)
+```
+
+```{r}
+# Create a list of everything that's not numeric in the Water_cover column
+snow_survey %>% 
+  count(Water_cover) %>%
+  # filter to keep only non-numeric rows
+  filter(is.na(as.numeric(Water_cover)))
+```
+
+With a quick check using the `count()` and `filter()` function to get a list of any non-numeric values, we can see that the `Water_cover` variable is a character column with various non-numeric values (e.g., `.`, `-`, `n/a`, `unk`).
+
+The first step in our data cleaning process is to convert the `Water_cover` column to a numeric type. Before doing this, we need to address each of these non-numeric values.
+
+#### Data cleaning
+
+Look at each non-numeric value individually and decide how to handle it. 
+
+###### `.` values
+
+Filter the data to keep only the rows with `.` values in the `Water_cover` column. 
+
+```{r}
+# filter the data to examine all rows with `.` in the Water_cover column
+snow_survey %>% 
+  filter(Water_cover == ".") %>% 
+  # view the filtered data
+  view()
+```
+
+It looks like all observations of `.` in the `Water_cover` column also have `.` in the `Land_cover` and `Total_cover` columns. I think it's safe to assume that these values are missing and should be replaced with `NA` since there is no supplemental information provided in the metadata about the usage of dots. 
+
+```{r}
+# replace all `.` observations with NA in the Water_cover column
+# "if there's a dot, replace it with NA; if not, keep the original value"
+snow_survey_fixed <- snow_survey %>% 
+  mutate(Water_cover = ifelse(Water_cover == ".", NA, Water_cover))
+
+# lets make sure this worked; there should be no "." values now
+snow_survey_fixed %>% 
+  filter(Water_cover == ".") %>%
+  view()
+```
+
+###### `-` values
+
+I'm guessing the problem is similar to the `.` values. But let's filter the data to see if this is the case. 
+```{r}
+# filter the data to examine all rows with `-` in the Water_cover column
+snow_survey_fixed %>% 
+  filter(Water_cover == "-") %>% 
+  # view the filtered data
+  view()
+```
+
+The issue appears the same. We will also assume that `-` values are missing data and replace them with `NA`.
+
+Looking at the metadata (`data/raw/01_ASDN_Readme.txt`), it confirms that `-` values indicate missing data. 
+
+```{r}
+# replace all `-` observations with NA in the Water_cover column
+# "if there's a dash, replace it with NA; if not, keep the original value"
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Water_cover = ifelse(Water_cover == "-", NA, Water_cover))
+
+# lets make sure this worked; there should be no "-" values now
+snow_survey_fixed %>% 
+  filter(Water_cover == "-") %>%
+  view()
+```
+
+###### `n/a` values
+
+Filter the data to see if `n/a` values are similar to the previous two. 
+
+This seems pretty clear that these are missing values, but let's examine the data first to be safe. 
+
+```{r}
+# filter the data to examine all rows with `n/a` in the Water_cover column
+snow_survey_fixed %>% 
+  filter(Water_cover == "n/a") %>% 
+  # view the filtered data
+  view()
+```
+
+All of the `n/a` values in the `Water_column` are accompanied by `n/a` values in the same row for the `Land_cover` column; however, interestingly, some of these rows have `Snow_cover` values recorded. We will set all `n/a` values in the `Water_cover` column to `NA` and figure out how to deal with these other values later when addressing the `Total_cover` column. 
+
+```{r}
+# replace all `n/a` observations with NA in the Water_cover column
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Water_cover = ifelse(Water_cover == "n/a", NA, Water_cover))
+
+# lets make sure this worked; there should be no "n/a" values now
+snow_survey_fixed %>% 
+  filter(Water_cover == "n/a") %>%
+  view()
+```
+
+###### `unk` values
+
+Filter the data to see if `unk` values are similar to the previous three. It is probably an abbreviation for unknown, but lets make sure. 
+
+```{r}
+# filter the data to examine all rows with `unk` in the Water_cover column
+snow_survey_fixed %>% 
+  filter(Water_cover == "unk") %>% 
+  # view the filtered data
+  view()
+```
+
+There is just one row with `unk` in the `Water_cover` column. We will replace this value with `NA` as well. 
+
+```{r}
+# change the unk value to NA
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Water_cover = ifelse(Water_cover == "unk", NA, Water_cover))
+
+# lets make sure this worked; there should be no "unk" values now
+snow_survey_fixed %>% 
+  filter(Water_cover == "unk") %>%
+  view()
+```
+
+###### `<1` values
+
+We didn't notice any `<1` values in the previous steps, but let's check to see if there are any since this was an issue with the `Snow_cover` column. 
+
+```{r}
+# filter the data to examine all rows with `<1` in the Water_cover column
+snow_survey_fixed %>% 
+  filter(Water_cover == "<1") %>% 
+  # view the filtered data
+  view()
+```
+
+There are no `<1` values in the `Water_cover` column. 
+
+###### Convert to numeric
+
+Now that we have replaced all of the non-numeric values with `NA`, we can convert the `Water_cover` column to a numeric type. Lets quickly make sure that we only have `NA` values as non-numeric values in the column now 
+
+```{r}
+# check the data types of the columns
+snow_survey_fixed %>% 
+  count(Water_cover) %>% 
+  # filter to keep only non-numeric rows
+  filter(is.na(as.numeric(Water_cover)))
+```
+
+Success, now we can transform the `Water_cover` column to a numeric type. 
+
+```{r}
+# convert the Water_cover column to a numeric type
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Water_cover = as.numeric(Water_cover))
+```
+
+###### Final cleaning
+
+Since we're dealing with percentages, we need to make sure that all values in the `Water_cover` column are between 0 and 100. 
+
+```{r}
+# check to make sure all values are between 0 and 100
+snow_survey_fixed %>% 
+  filter(Water_cover < 0 | Water_cover > 100)
+```
+
+We have one observation with `Water_cover` equal to `353%`. This is likely a missing value, so we will replace it with `NA`. 
+
+```{r}
+# replace the values greater than 100 with NA
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Water_cover = ifelse(Water_cover > 100, NA, Water_cover))
+```
+
+Yay! The `Water_cover` column is now clean. Lets move on to the `Land_cover` column.
+
+## (2) Clean the `Land_cover` column
+
+#### Data exploration
+
+Take a look at the `Land_cover` column to see what's wrong. 
+
+```{r}
+# Check the data types of the columns
+snow_survey_fixed %>% 
+  count(Land_cover)
+```
+
+```{r}
+# create a list of everything that's not numeric in the Land_cover column
+snow_survey_fixed %>% 
+  count(Land_cover) %>%
+  # filter to keep only non-numeric rows
+  filter(is.na(as.numeric(Land_cover)))
+```
+
+The `Land_cover` column is also a character column with the same various non-numeric values (e.g., `.`, `-`, `n/a`, `unk`). We will follow the same steps outlined above for the `Water_cover` column to clean the `Land_cover` column.
+
+#### Data cleaning
+
+Again, we will look at each non-numeric value individually and decide how to handle it.
+
+###### `.` values
+
+Filter the data to keep only the rows with `.` values in the `Land_cover` column. 
+
+```{r}
+# filter the data to examine all rows with `.` in the Land_cover column
+snow_survey_fixed %>% 
+  filter(Land_cover == ".") %>% 
+  # view the filtered data
+  view()
+```
+
+Convert the `.` values to `NA` in the `Land_cover` column. 
+
+```{r}
+# replace all `.` observations with NA in the Land_cover column
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Land_cover = ifelse(Land_cover == ".", NA, Land_cover))
+
+# lets make sure this worked; there should be no "." values now
+snow_survey_fixed %>% 
+  filter(Land_cover == ".") %>%
+  view()
+```
+
+###### `-` values
+
+Filter the data to see if `-` values are similar to the `.` values. 
+
+```{r}
+# filter the data to examine all rows with `-` in the Land_cover column
+snow_survey_fixed %>% 
+  filter(Land_cover == "-") %>% 
+  # view the filtered data
+  view()
+```
+
+The issue appears the same. We will also assume that `-` values are missing data and replace them with `NA`. 
+```{r}
+# replace all `-` observations with NA in the Land_cover column
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Land_cover = ifelse(Land_cover == "-", NA, Land_cover))
+
+# lets make sure this worked; there should be no "-" values now
+snow_survey_fixed %>% 
+  filter(Land_cover == "-") %>%
+  view()
+```
+
+###### `n/a` values
+
+Filter the data to see if `n/a` values are similar to the previous two. 
+
+```{r}
+# filter the data to examine all rows with `n/a` in the Land_cover column
+snow_survey_fixed %>% 
+  filter(Land_cover == "n/a") %>% 
+  # view the filtered data
+  view()
+```
+
+All of the `n/a` values in the `Land_cover` column are accompanied by `NA` values in the same row for the `Water_cover` column -- these appear to be the same rows that we transformed from `n/a` to `NA` in the `Water_cover` column in the data cleaning steps above.
+
+We will set all `n/a` values in the `Land_cover` column to `NA` as well. 
+
+```{r}
+# replace all `n/a` observations with NA in the Land_cover column
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Land_cover = ifelse(Land_cover == "n/a", NA, Land_cover))
+
+# lets make sure this worked; there should be no "n/a" values now
+snow_survey_fixed %>% 
+  filter(Land_cover == "n/a") %>%
+  view()
+```
+
+###### `unk` values
+
+Filter the data to examine the `unk` values.
+
+```{r}
+# filter the data to examine all rows with `unk` in the Land_cover column
+snow_survey_fixed %>% 
+  filter(Land_cover == "unk") %>% 
+  # view the filtered data
+  view()
+```
+
+There is just 1 row with `unk` in the `Land_cover` column. We will replace this value with `NA` as well. 
+
+```{r}
+# change the unk value to NA
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Land_cover = ifelse(Land_cover == "unk", NA, Land_cover))
+
+# lets make sure this worked; there should be no "unk" values now
+snow_survey_fixed %>% 
+  filter(Land_cover == "unk") %>%
+  view()
+```
+
+###### `<1` values
+
+We didn't notice any `<1` values in the previous steps, but let's check to see if there are any since this was an issue with the `Snow_cover` column. 
+
+```{r}
+# filter the data to examine all rows with `<1` in the Land_cover column
+snow_survey_fixed %>% 
+  filter(Land_cover == "<1") %>% 
+  # view the filtered data
+  view()
+```
+
+There are no `<1` values in the `Land_cover` column.
+
+###### Convert to numeric
+
+Now that we have replaced all of the non-numeric values with `NA`, we can convert the `Land_cover` column to a numeric type. Lets quickly make sure that we only have `NA` values as non-numeric values in the column now.
+
+```{r}
+# check the data types of the columns
+snow_survey_fixed %>% 
+  count(Land_cover) %>% 
+  # filter to keep only non-numeric rows
+  filter(is.na(as.numeric(Land_cover)))
+```
+
+Success, now we can transform the `Land_cover` column to a numeric type!
+
+```{r}
+# convert the Land_cover column to a numeric type
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Land_cover = as.numeric(Land_cover))
+```
+
+###### Final cleaning
+
+Since we're dealing with percentages, we need to make sure that all values in the `Land_cover` column are between 0 and 100. I noticed some values outside of this range in our initial exploration, so we will need to check for these as well. 
+
+```{r}
+# check to make sure all values are between 0 and 100
+snow_survey_fixed %>% 
+  filter(Land_cover < 0 | Land_cover > 100)
+```
+
+We have one observation with `Land_cover` equal to `-100%`, and another equal to `-298%`. These are likely missing values, so we will replace them with `NA`. 
+
+```{r}
+# replace the values less than 0 with NA
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Land_cover = ifelse(Land_cover < 0, NA, Land_cover))
+
+# check to make sure all values are between 0 and 100
+snow_survey_fixed %>% 
+  filter(Land_cover < 0 | Land_cover > 100)
+```
+
+Woohoo! Now we have successfully cleaned the `Land_cover` column. Our last step is to use the relationship between the three cover columns (Snow, Water, Land) to infer missing values where possible and recompute the `Total_cover` column as needed.
+
+## (3) Clean the `Total_cover` column
+
+The final step in our data cleaning process is to clean the `Total_cover` column. We're tasked with using the relationship between the three cover columns (Snow, Water, Land) to infer missing values where possible and recompute the `Total_cover` column as needed.
+
+#### Data exploration
+
+To check the values in the `Total_cover` column, we will first filter the data to see if there are any missing values. 
+
+```{r}
+# check the data types of the columns
+snow_survey_fixed %>% 
+  count(Total_cover)
+```
+
+```{r}
+# create a list of everything that's not numeric in the Total_cover column
+snow_survey_fixed %>% 
+  count(Total_cover) %>%
+  # filter to keep only non-numeric rows
+  filter(is.na(as.numeric(Total_cover)))
+```
+
+It looks like there are also non-numeric values in the `Total_cover` column. 
+
+#### Data cleaning
+
+We will follow the same steps outlined above for the `Water_cover` and `Land_cover` columns to examine and clean the non-numeric values `Total_cover` column.
+
+###### `.` values
+
+Filter the data to keep only the rows with `.` values in the `Total_cover` column. 
+
+```{r}
+# filter the data to examine all rows with `.` in the Total_cover column
+snow_survey_fixed %>% 
+  filter(Total_cover == ".") %>% 
+  # view the filtered data
+  view()
+```
+
+The `.` values in the `Total_cover` column are accompanied by `NA` values in the same row for the `Snow_cover`, `Water_cover` and `Land_cover` columns. We will replace these values with `NA`. 
+
+```{r}
+# replace all `.` observations with NA in the Total_cover column
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Total_cover = ifelse(Total_cover == ".", NA, Total_cover))
+
+# lets make sure this worked; there should be no "." values now
+snow_survey_fixed %>% 
+  filter(Total_cover == ".") %>%
+  view()
+```
+
+###### `-` values
+
+Filter the data to see if `-` values are similar to the `.` values. 
+
+```{r}
+# filter the data to examine all rows with `-` in the Total_cover column
+snow_survey_fixed %>% 
+  filter(Total_cover == "-") %>% 
+  # view the filtered data
+  view()
+```
+
+The issue appears the same. We will also replace all `-` values with `NA`. 
+
+```{r}
+# replace all `-` observations with NA in the Total_cover column
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Total_cover = ifelse(Total_cover == "-", NA, Total_cover))
+
+# lets make sure this worked; there should be no "-" values now
+snow_survey_fixed %>% 
+  filter(Total_cover == "-") %>%
+  view()
+```
+
+###### `n/a` values
+
+Filter the data to see if `n/a` values are similar to the previous two. 
+
+```{r}
+# filter the data to examine all rows with `n/a` in the Total_cover column
+snow_survey_fixed %>% 
+  filter(Total_cover == "n/a") %>% 
+  # view the filtered data
+  view()
+```
+
+The `n/a` values in the `Total_cover` column are accompanied by `NA` values in the same row for the `Snow_cover`, `Water_cover` and `Land_cover` columns. We will replace these values with `NA`. 
+
+```{r}
+# replace all `n/a` observations with NA in the Total_cover column
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Total_cover = ifelse(Total_cover == "n/a", NA, Total_cover))
+
+# lets make sure this worked; there should be no "n/a" values now
+snow_survey_fixed %>% 
+  filter(Total_cover == "n/a") %>%
+  view()
+```
+
+###### `<row r=\\64\\ spans=\\1:11\\ x14ac:dyDescent=\\0.2\\>`
+
+There's one row with this value in the `Total_cover` column that's accompanied by `NA` values in the Snow, Water, and Land cover columns. This is likely a formatting issue, so we will replace it with `NA`. 
+
+```{r}
+# change the <row r=\64\ spans=\1:11\ x14ac:dyDescent=\0.2\> value to NA
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Total_cover = ifelse(Total_cover == "<row r=\\64\\ spans=\\1:11\\ x14ac:dyDescent=\\0.2\\>", NA, Total_cover))
+
+# lets make sure this worked; there should be no "<row r=\64\ spans=\1:11\ x14ac:dyDescent=\0.2\>" values now
+snow_survey_fixed %>% 
+  filter(Total_cover == "<row r=\\64\\ spans=\\1:11\\ x14ac:dyDescent=\\0.2\\>") %>%
+  view()
+```
+
+###### Convert to numeric
+
+Now that we have replaced all of the non-numeric values with `NA`, we can convert the `Total_cover` column to a numeric type. Lets quickly make sure that we only have `NA` values as non-numeric values in the column now.
+
+```{r}
+# check the data types of the columns
+snow_survey_fixed %>% 
+  count(Total_cover) %>% 
+  # filter to keep only non-numeric rows
+  filter(is.na(as.numeric(Total_cover)))
+```
+
+Success, now we can transform the `Total_cover` column to a numeric type!
+
+```{r}
+# convert the Total_cover column to a numeric type
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Total_cover = as.numeric(Total_cover))
+```
+
+###### Additional cleaning: recompute and infer missing values
+
+The metadata indicates that the `Total_cover` column is the sum of the `Snow_cover`, `Water_cover`, and `Land_cover` columns, and should always sum to 100. Lets check to see if this is the case. 
+
+```{r}
+# examine all rows where the total cover is not equal to 100, and is not NA
+snow_survey_fixed %>% 
+  filter(Total_cover != 100 & !is.na(Total_cover)) %>% 
+  view()
+```
+
+Alarmingly, there are 4,743 entries where the `Total_cover` is not equal to 100 and is not NA. This is a huge issue, and we need to address it.
+
+It's possible that the summing of the `Snow_cover`, `Water_cover`, and `Land_cover` columns is incorrect for some observations. We will recompute the `Total_cover` and re-examine the data. 
+
+```{r}
+# recompute the Total_cover column by summing the Snow_cover, Water_cover, and Land_cover columns
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Total_cover = Snow_cover + Water_cover + Land_cover)
+
+# re-examine all rows where the total cover is not equal to 100, and is not NA
+snow_survey_fixed %>% 
+  filter(Total_cover != 100 & !is.na(Total_cover)) %>% 
+  view()
+```
+
+There are now 4,573 entries where the `Total_cover` is not equal to 100 and is not NA. This is an improvement, and shows that some rows were simply summed incorrectly, but we still have a lot of entries that are incorrect.
+
+Lets now take a look at the rows where there are missing values in the `Total_cover` column. 
+
+```{r}
+# examine all rows where the total cover is NA
+snow_survey_fixed %>% 
+  filter(is.na(Total_cover)) %>% 
+  view()
+```
+
+Looking at the data, it appears that there are some rows where the `Snow_cover`, `Water_cover`, and `Land_cover` columns should add up to 100 in the `Total_cover` column, but the `Total_cover` column is `NA` instead of 100 because of the way we computed the `Total_cover` column. For example, if `Snow_cover` is `NA`, and `Water_cover` is `NA`, and `Land_cover` is `100`, then the `Total_cover` column will be `NA` instead of `100`.
+
+To make sure the `Total_cover` column is correct, we will recompute the `Total_cover` column by summing the `Snow_cover`, `Water_cover`, and `Land_cover` columns, and ignoring any `NA` values. 
+
+```{r}
+# recompute the Total_cover column 
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Total_cover = rowSums(across(c(Snow_cover, Water_cover, Land_cover)), 
+                               na.rm = TRUE))
+
+# re-examine all rows where the total cover NA
+snow_survey_fixed %>% 
+  filter(is.na(Total_cover)) %>% 
+  view()
+```
+
+It looks like this assigned a value of 0 for `Total_cover` when the `Snow_cover`, `Water_cover`, and `Land_cover` columns are all `NA`. This is not correct, and we need to replace these values with `NA` instead. 
+
+```{r}
+# examine all rows where the total cover is 0
+snow_survey_fixed %>% 
+  filter(Total_cover == 0) %>% 
+  view()
+
+# replace the values of 0 with NA
+snow_survey_fixed <- snow_survey_fixed %>% 
+  mutate(Total_cover = ifelse(Total_cover == 0, NA, Total_cover))
+```
+
+The steps above helped clean the `Total_cover` column. Let's check to see if there are any remaining issues by filtering for all rows that are not equal to 100 and are not NA. 
+
+```{r}
+# re-examine all rows where the total cover is not equal to 100, and is not NA
+snow_survey_fixed %>% 
+  filter(Total_cover != 100) %>% 
+  view()
+```
+
+There are still a lot of issues with the `Total_cover` column; 3,319 entries are not equal to 100. Fixing this is outside the scope of the assignment, and there is no documentation for how to deal with these values in the metadata. We will leave them as is for now. 
+
+However, hypothetically, if I were to be tasked with dealing with this data, I would recommend first reaching out to the data owners and site PI for each dataset to see if they have any suggestions for how to handle these values. This is recommended in the metadata. If they don't provide a good answer, I would recommend removing these rows from the file, as they are likely erroneous entries. 
+
+
+
+
+
+
+
+
+
