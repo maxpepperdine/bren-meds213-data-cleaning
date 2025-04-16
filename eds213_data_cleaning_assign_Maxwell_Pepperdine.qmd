@@ -33,16 +33,14 @@ We cleaned the `Snow_cover` column during class. Inspiring yourself from the ste
 
 3. Use the relationship between the three cover columns (Snow, Water, Land) to infer missing values where possible and recompute the `Total_cover` column as needed
 
-**Add comments to your quarto document about your decisions and assumptions**, this will be a large part of the grading (see below).
-
 #### Expectations
 
 The expectations are:
 
-- The Quarto document `eds213_data_cleaning_assign_Maxwell_Pepperdine.qmd` should run if your repo is cloned locally (5 pts; Reproducibility)
-- The code should output a csv file named all_cover_fixed_YOURNAME.csv in the data/processed folder (5 pts; Code)
-- Comment your code well (10 pts; Documentation)
-- Your quarto document should provide all the necessary explanations about your decisions and discuss any assumptions you made (don’t forget to look at the metadata!) (30 pts; Documentation)
+- The Quarto document `eds213_data_cleaning_assign_Maxwell_Pepperdine.qmd` should run if this repo is cloned locally (5 pts; Reproducibility)
+- The code should output a csv file named `all_cover_fixed_Maxwell_Pepperdine.csv` in the data/processed folder (5 pts; Code)
+- Comment the code well (10 pts; Documentation)
+- The quarto document should provide all the necessary explanations about decisions and discuss any assumptions made (don’t forget to look at the metadata!) (30 pts; Documentation)
 - The code should perform the 3 data cleaning steps describe above to enable ingestion into a database (50 pts; Technical concepts)
 
 #### Load data
@@ -111,6 +109,7 @@ snow_survey_fixed %>%
 ###### `-` values
 
 I'm guessing the problem is similar to the `.` values. But let's filter the data to see if this is the case. 
+
 ```{r}
 # filter the data to examine all rows with `-` in the Water_cover column
 snow_survey_fixed %>% 
@@ -203,7 +202,7 @@ There are no `<1` values in the `Water_cover` column.
 
 ###### Convert to numeric
 
-Now that we have replaced all of the non-numeric values with `NA`, we can convert the `Water_cover` column to a numeric type. Lets quickly make sure that we only have `NA` values as non-numeric values in the column now 
+Now that we have replaced all of the non-numeric values with `NA`, we can convert the `Water_cover` column to a numeric type. Lets quickly make sure that we only have `NA` values as non-numeric values in the column now. 
 
 ```{r}
 # check the data types of the columns
@@ -305,6 +304,7 @@ snow_survey_fixed %>%
 ```
 
 The issue appears the same. We will also assume that `-` values are missing data and replace them with `NA`. 
+
 ```{r}
 # replace all `-` observations with NA in the Land_cover column
 snow_survey_fixed <- snow_survey_fixed %>% 
@@ -448,7 +448,7 @@ snow_survey_fixed %>%
   filter(is.na(as.numeric(Total_cover)))
 ```
 
-It looks like there are also non-numeric values in the `Total_cover` column. 
+It looks like there are also non-numeric values in the `Total_cover` column. Furthermore, we can see that the `Total_cover` column includes values that are not equal to 100, which is an issue that we will need to address later.
 
 #### Data cleaning
 
@@ -577,7 +577,7 @@ snow_survey_fixed %>%
 
 Alarmingly, there are 4,743 entries where the `Total_cover` is not equal to 100 and is not NA. This is a huge issue, and we need to address it.
 
-It's possible that the summing of the `Snow_cover`, `Water_cover`, and `Land_cover` columns is incorrect for some observations. We will recompute the `Total_cover` and re-examine the data. 
+Looking briefly at these entries, it's evident that the summing of the `Snow_cover`, `Water_cover`, and `Land_cover` columns is incorrect for some observations. We will recompute the `Total_cover` and re-examine the data. 
 
 ```{r}
 # recompute the Total_cover column by summing the Snow_cover, Water_cover, and Land_cover columns
@@ -603,12 +603,14 @@ snow_survey_fixed %>%
 
 Looking at the data, it appears that there are some rows where the `Snow_cover`, `Water_cover`, and `Land_cover` columns should add up to 100 in the `Total_cover` column, but the `Total_cover` column is `NA` instead of 100 because of the way we computed the `Total_cover` column. For example, if `Snow_cover` is `NA`, and `Water_cover` is `NA`, and `Land_cover` is `100`, then the `Total_cover` column will be `NA` instead of `100`.
 
-To make sure the `Total_cover` column is correct, we will recompute the `Total_cover` column by summing the `Snow_cover`, `Water_cover`, and `Land_cover` columns, and ignoring any `NA` values. 
+To make sure the `Total_cover` column is correct, we will recompute the `Total_cover` column by summing the `Snow_cover`, `Water_cover`, and `Land_cover` columns, and ignoring any `NA` values to avoid the entire row summing to `NA` when present in any other column. 
 
 ```{r}
 # recompute the Total_cover column 
 snow_survey_fixed <- snow_survey_fixed %>% 
-  mutate(Total_cover = rowSums(across(c(Snow_cover, Water_cover, Land_cover)), 
+  # sum the Snow_cover, Water_cover, and Land_cover columns
+  mutate(Total_cover = rowSums(across(c(Snow_cover, Water_cover, Land_cover)),
+                               # ignore NA values when summing
                                na.rm = TRUE))
 
 # re-examine all rows where the total cover NA
@@ -630,19 +632,27 @@ snow_survey_fixed <- snow_survey_fixed %>%
   mutate(Total_cover = ifelse(Total_cover == 0, NA, Total_cover))
 ```
 
-The steps above helped clean the `Total_cover` column. Let's check to see if there are any remaining issues by filtering for all rows that are not equal to 100 and are not NA. 
+The steps above helped clean the `Total_cover` column. Let's check to see if there are any remaining issues by filtering for all rows that are not equal to 100. 
 
 ```{r}
-# re-examine all rows where the total cover is not equal to 100, and is not NA
+# re-examine all rows where the total cover is not equal to 100
 snow_survey_fixed %>% 
   filter(Total_cover != 100) %>% 
   view()
 ```
 
-There are still a lot of issues with the `Total_cover` column; 3,319 entries are not equal to 100. Fixing this is outside the scope of the assignment, and there is no documentation for how to deal with these values in the metadata. We will leave them as is for now. 
+There are still a lot of issues with the `Total_cover` column; 3,319 entries are not equal to 100! Fixing this is outside the scope of the assignment, and there is no documentation for how to deal with these values in the metadata. We will leave them as is for now. 
 
 However, hypothetically, if I were to be tasked with dealing with this data, I would recommend first reaching out to the data owners and site PI for each dataset to see if they have any suggestions for how to handle these values. This is recommended in the metadata. If they don't provide a good answer, I would recommend removing these rows from the file, as they are likely erroneous entries. 
 
+## Save the cleaned data
+
+Now that we have cleaned the `Water_cover`, `Land_cover`, and `Total_cover` columns to transform them into the correct data type, inferred missing values where possible and recomputed the `Total_cover` column, we can save the cleaned data to a new CSV file (`data/processed/all_cover_fixed_Maxwell_Pepperdine.csv`). 
+
+```{r}
+# save the cleaned data to a new CSV file
+write_csv(snow_survey_fixed, here("data/processed/all_cover_fixed_Maxwell_Pepperdine.csv"))
+```
 
 
 
