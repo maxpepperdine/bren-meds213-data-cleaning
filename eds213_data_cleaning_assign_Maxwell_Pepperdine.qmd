@@ -566,12 +566,17 @@ snow_survey_fixed <- snow_survey_fixed %>%
 
 ###### Additional cleaning: recompute and infer missing values
 
+**OFFICE HOUR NOTES:**
+- If one NA value with two other % covers, infer this missing value to recompute that missing value
+- What if one value is 100? Assign other records 0's
+
+
 The metadata indicates that the `Total_cover` column is the sum of the `Snow_cover`, `Water_cover`, and `Land_cover` columns, and should always sum to 100. Lets check to see if this is the case. 
 
 ```{r}
 # examine all rows where the total cover is not equal to 100, and is not NA
 snow_survey_fixed %>% 
-  filter(Total_cover != 100 & !is.na(Total_cover)) %>% 
+  filter(Total_cover != 100) %>% 
   view()
 ```
 
