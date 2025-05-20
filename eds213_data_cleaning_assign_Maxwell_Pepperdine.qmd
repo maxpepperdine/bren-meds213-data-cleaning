@@ -21,6 +21,14 @@ rm(list = ls())
 # Load packages
 library(tidyverse) # always
 library(here) # for file paths
+library(devtools) # for session info
+```
+
+###### Capture session info with `devtools::session_info()`
+
+```{r}
+# Capture session info and write to a text file
+capture.output(devtools::session_info(), file = here::here("snow_survey_session_info.txt"))
 ```
 
 #### Assignment Description
